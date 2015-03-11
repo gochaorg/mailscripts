@@ -1,0 +1,223 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+import os
+import re
+import sys
+import emailer_buildinfo
+
+from mailer import Mailer
+
+mlr = Mailer()
+mlr.addrTo = []
+
+program = os.path.basename(sys.argv[0])
+conffiles = [ 
+	'/etc/{brand}/{package}/{program}.py'.format(
+		brand=emailer_buildinfo.BUILD_BRAND(),
+		package=emailer_buildinfo.BUILD_PACKAGE(),
+		program=program,
+		home=os.getenv('HOME')
+	),
+	'/etc/{package}/{program}.py'.format(
+		brand=emailer_buildinfo.BUILD_BRAND(),
+		package=emailer_buildinfo.BUILD_PACKAGE(),
+		program=program,
+		home=os.getenv('HOME')
+	),
+	'/etc/{program}.py'.format(
+		brand=emailer_buildinfo.BUILD_BRAND(),
+		package=emailer_buildinfo.BUILD_PACKAGE(),
+		program=program,
+		home=os.getenv('HOME')
+	),
+	'{home}/.{brand}/{package}/{program}.py'.format(
+		brand=emailer_buildinfo.BUILD_BRAND(),
+		package=emailer_buildinfo.BUILD_PACKAGE(),
+		program=program,
+		home=os.getenv('HOME')
+	),
+	'{home}/.{package}/{program}.py'.format(
+		brand=emailer_buildinfo.BUILD_BRAND(),
+		package=emailer_buildinfo.BUILD_PACKAGE(),
+		program=program,
+		home=os.getenv('HOME')
+	),
+	'{home}/.{program}.py'.format(
+		brand=emailer_buildinfo.BUILD_BRAND(),
+		package=emailer_buildinfo.BUILD_PACKAGE(),
+		program=program,
+		home=os.getenv('HOME')
+	),
+]
+for conffile in conffiles:
+	if os.path.isfile( conffile ):
+		if ('verbose' in sys.argv):
+			print 'Чтение конфигурации {conf}'.format( conf = conffile )
+		execfile( conffile )
+		if mlr.verbose:
+			print 'Прочитана конфигурация из файла {conf}'.format( conf = conffile )
+
+if len(sys.argv)==1:
+	print \
+"""Справка по {program}.
+
+Автор: {author}
+Версия: {version}-{build_num},
+Дата сборки: {build_date},
+Домашняя страница: {homepage}
+
+Синтаксис:
+{program} {{команда}}
+
+команда ::=
+    from адрес-от-кого    # Адрес - от кого отправляется письмо
+  | to адрес-куда         # Адрес - куда отправляется письмо
+  | subject Тема          # Тема письма
+  | text Текст-письма     # Текст письма
+  | attach Файл           # Прикрепленный файл
+  | smtp Хост порт        # Адрес SMTP: Хост и порт
+  | ssl                   # Использовать SSL
+  | tls                   # Использовать TLS
+  | verbose               # Выводить лог действий
+  | timeout Кол-во        # Таймаут подключения в секундах
+  | passowrd Пароль       # Пароль для SMTP
+  | send                  # Отправить письмо
+  | login Логин           # Логин отправителя
+  | split Размер          # Разделяет вложение на несколько писем
+                          # Пример
+                          # 300b - По триста байт
+                          # 300k - По триста килобайт
+                          # 5m - По пять мегабайт
+                          # 1g - По одному гигабайту
+                          # Использует архиватор 7zip
+  | subj-tmpl Шаблон      # Шаблон темы используемый при разбивке
+                          # вложения на несколько частей (параметр split)
+                          # Переменные в шаблоне 
+                          # {{subject}} - Тема указанная паратером subject
+                          # {{filepath}} - Путь файла вложения
+                          # {{filename}} - Имя файла вложения
+                          # {{attachpath}} - Путь части-файла
+                          # {{attachname}} - Имя части-файла
+                          # {{part}} - Номер части (1...{{total}})
+                          # {{total}} - Кол-во частей
+                          # {{date}} - Дата отправки
+
+Примеры:
+  Отправка письма на gmail с использование сервера yandex
+  
+  > {program} from gochcha@yandex.ru to nt.gocha@gmail.com \\
+      subject Тема text 'Текст письма' \\
+      attach sendemail.py \\
+      smtp smtp.yandex.ru 465 ssl \\
+      password Пароль \\
+      send
+
+  Отправка письма на yandex с использование сервера gmail
+
+  > {program} from nt.gocha@gmail.com to gochcha@yandex.ru \\
+      subject Тема text 'Текст письма' \\
+      attach sendemail.py \\
+      smtp smtp.gmail.com 587 tls \\
+      password Пароль \\
+      send
+
+""".format(
+	program		=program,
+	build_num	=emailer_buildinfo.BUILD_NUM(),
+	build_date	=emailer_buildinfo.BUILD_DATE(),
+	homepage	=emailer_buildinfo.BUILD_HOMEPAGE(),
+	author		=emailer_buildinfo.BUILD_AUTHOR(),
+	version		=emailer_buildinfo.BUILD_VERSION(),
+	maintainer	=emailer_buildinfo.BUILD_MAINTAINER(),
+	package		=emailer_buildinfo.BUILD_PACKAGE(),
+	brand		=emailer_buildinfo.BUILD_BRAND()
+	)
+
+else:
+	state = ''
+	for arg_idx_1 in range(len(sys.argv)):
+		arg = sys.argv[arg_idx_1]
+		if state=='':
+			if arg=='from':
+				state='from'
+			elif arg=='to':
+				state='to'
+			elif arg=='login':
+				state='login'
+			elif arg=='subject':
+				state='subject'
+			elif arg=='text':
+				state='text'
+			elif arg=='attach':
+				state='attach'
+			elif arg=='smtp':
+				state='smtp'
+			elif arg=='ssl':
+				mlr.useSSL=True
+				mlr.imapSSL = True
+				mlr.imapPort = 993
+			elif arg=='tls':
+				mlr.useTLS=True
+			elif arg=='verbose':
+				mlr.verbose=True
+			elif arg=='timeout':
+				state='timeout'
+			elif arg=='password':
+				state='password'
+			elif arg=='split':
+				state='split'
+			elif arg=='subj-tmpl':
+				state='subj-tmpl'
+			elif arg=='imap':
+				state='imap'
+			elif arg=='send':
+				result = mlr.send()
+				if not result:
+					sys.exit(1)
+					break
+			elif arg=='list':
+				mlr.list()
+		elif state=='imap':
+			state='imapPort'
+			mlr.imapHost = arg
+		elif state=='imapPort':
+			state = ''
+			mlr.imapPort = arg
+		elif state=='subj-tmpl':
+			state=''
+			mlr.subjectTmpl = arg
+		elif state=='split':
+			state=''
+			mlr.split = arg
+		elif state=='from':
+			state=''
+			mlr.addrFrom = arg
+		elif state=='to':
+			state=''
+			mlr.addrTo.append( arg )
+		elif state=='timeout':
+			state=''
+			mlr.timeout = arg
+		elif state=='subject':
+			state=''
+			mlr.subject = arg
+		elif state=='text':
+			mlr.text = mlr.text + arg
+			state = ''
+		elif state=='attach':
+			mlr.attach.append( arg )
+			state = ''
+		elif state=='login':
+			state=''
+			mlr.login = arg
+		elif state=='smtp':
+			state='smtpPort'
+			mlr.smtpHost = arg
+		elif state=='smtpPort':
+			state=''
+			mlr.smtpPort = arg
+		elif state=='password':
+			state=''
+			mlr.smtpPassword = arg
+			mlr.imapPassword = arg
