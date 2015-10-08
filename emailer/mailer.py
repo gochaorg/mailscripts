@@ -206,11 +206,10 @@ class Mailer:
 				mailServer.starttls()
 
 			_login_ = self.login
-			if _login_ == False:
+			if _login_ != False:
 				_login_ = self.addrFrom
-
-			self.log( 'Команда LOGIN, логин={login}'.format(login=_login_) )
-			mailServer.login( _login_, self.smtpPassword )
+				self.log( 'Команда LOGIN, логин={login}'.format(login=_login_) )
+				mailServer.login( _login_, self.smtpPassword )
 
 			if isinstance(msg,(tuple,list)):
 				for message in msg:
